@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>ESP32 IoT Dashboard</title>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+<style>
+
+*{
+margin:0;
+padding:0;
+box-sizing:border-box;
+font-family:Arial,sans-serif;
+}
+
+body{
+background:#0f172a;
+color:white;
+height:100vh;
+overflow:hidden;
+}
+
+/* LOGIN PAGE */
+
+#loginPage{
+height:100vh;
+display:flex;
+justify-content:center;
+align-items:center;
+background:#0f172a;
+}
+
+.login-box{
+width:350px;
+background:#1e293b;
+padding:30px;
+border-radius:15px;
+box-shadow:0 0 20px rgba(0,0,0,.3);
+}
+
+.login-box h2{
+text-align:center;
+margin-bottom:20px;
+}
+
+.login-box input{
+width:100%;
+padding:12px;
+border:none;
+border-radius:8px;
+margin-bottom:12px;
+font-size:16px;
+}
+
+.login-box button{
+width:100%;
+padding:12px;
+border:none;
+border-radius:8px;
+cursor:pointer;
+font-size:16px;
+}
+
+#error{
+margin-top:10px;
+color:#ef4444;
+text-align:center;
+}
+
+/* DASHBOARD */
+
+#dashboard{
+display:none;
+height:100vh;
+}
+
+.header{
+background:#111827;
+padding:15px;
+position:sticky;
+top:0;
+z-index:100;
+border-bottom:1px solid #334155;
+}
+
+.header h1{
+text-align:center;
+margin-bottom:10px;
+}
+
+.stats{
+text-align:center;
+margin-bottom:10px;
+font-size:18px;
+}
+
+.topbar{
+display:flex;
+gap:10px;
+justify-content:center;
+align-items:center;
+flex-wrap:wrap;
+}
+
+#searchBox{
+width:500px;
+max-width:90%;
+padding:12px;
+border:none;
+border-radius:10px;
+font-size:16px;
+}
+
+.logoutBtn{
+padding:12px 20px;
+border:none;
+border-radius:10px;
+cursor:pointer;
+font-weight:bold;
+}
+
+.dashboard-content{
+height:calc(100vh - 130px);
+overflow-y:auto;
+padding:20px;
+}
+
+#devices{
+display:grid;
+grid-template-columns:
+repeat(auto-fill,minmax(320px,1fr));
+gap:20px;
+}
+
+.card{
+background:#1e293b;
+border-radius:15px;
+padding:20px;
+box-shadow:0 0 15px rgba(0,0,0,.3);
+}
+
+.deviceid{
+font-size:12px;
+color:#94a3b8;
+word-break:break-all;
+margin-bottom:15px;
+}
+
+.status{
+font-weight:bold;
+font-size:18px;
+margin-bottom:15px;
+}
+
+.online{
+color:#22c55e;
+}
+
+.warning{
+color:#facc15;
+}
+
+.offline{
+color:#ef4444;
+}
+
+.temp{
+color:#f87171;
+font-size:20px;
+margin:10px 0;
+}
+
+.hum{
+color:#38bdf8;
+font-size:20px;
+margin:10px 0;
+}
+
+.press{
+color:#facc15;
+font-size:20px;
+margin:10px 0;
+}
+
+.time{
+color:#cbd5e1;
+font-size:14px;
+margin-top:15px;
+}
+
+.noData{
+text-align:center;
+font-size:24px;
+padding:40px;
+}
+
+</style>
+</head>
+<body>
+
+<!-- LOGIN PAGE -->
+
+<div id="loginPage">
+
+<div class="login-box">
+
+<h2>🔐 Dashboard Login</h2>
+
+<input
+type="email"
+id="email"
+placeholder="Email Address">
+
+<input
+type="password"
+id="password"
+placeholder="Password">
+
+<button onclick="login()">
+Login
+</button>
+
+<p id="error"></p>
+
+</div>
+
+</div>
+
+<!-- DASHBOARD -->
+
+<div id="dashboard">
+
+<div class="header">
+
+<h1>🌡 ESP32 Monitoring Dashboard</h1>
+
+<div class="stats">
+Total Devices:
+<span id="deviceCount">0</span>
+</div>
+
+<div class="topbar">
+
+<input
+type="text"
+id="searchBox"
+placeholder="Search Device ID...">
+
+<button
+class="logoutBtn"
+onclick="logout()">
+Logout
+</button>
+
+</div>
+
+</div>
+
+<div class="dashboard-content">
+
+<div id="devices"></div>
+
+</div>
+
+</div>
+
+<script>
+
+const firebaseConfig = {
+
+apiKey: "AIzaSyBODo80gMlD_GLMgeJ3Wx5sQZGfh2ma_Ik",
+
+authDomain:
+"tem001-1c169.firebaseapp.com",
+
+databaseURL:
+"https://tem001-1c169-default-rtdb.asia-southeast1.firebasedatabase.app",
+
+projectId:
+"tem001-1c169",
+
+storageBucket:
+"tem001-1c169.firebasestorage.app",
+
+messagingSenderId:
+"971618808337",
+
+appId:
+"1:971618808337:web:7999b2b78b4033217e77b0"
+
+};
+
+firebase.initializeApp(firebaseConfig);
+
+// Remember Me
+
+firebase.auth().setPersistence(
+firebase.auth.Auth.Persistence.LOCAL
+);
+
+function login()
+{
+const email =
+document.getElementById("email").value;
+
+const password =
+document.getElementById("password").value;
+
+firebase.auth()
+.signInWithEmailAndPassword(
+email,
+password
+)
+.then(() => {
+
+document.getElementById(
+"error"
+).innerHTML = "";
+
+})
+.catch((error) => {
+
+document.getElementById(
+"error"
+).innerHTML =
+error.message;
+
+});
+}
+
+function logout()
+{
+firebase.auth().signOut();
+}
+
+firebase.auth().onAuthStateChanged(
+function(user){
+
+if(user)
+{
+document.getElementById(
+"loginPage"
+).style.display = "none";
+
+document.getElementById(
+"dashboard"
+).style.display = "block";
+}
+else
+{
+document.getElementById(
+"loginPage"
+).style.display = "flex";
+
+document.getElementById(
+"dashboard"
+).style.display = "none";
+}
+});
+
+let allDevices = {};
+
+firebase.database()
+.ref("devices")
+.on("value", function(snapshot){
+
+allDevices =
+snapshot.val() || {};
+
+renderDevices();
+
+});
+function renderDevices()
+{
+const search =
+document.getElementById(
+"searchBox"
+).value.toLowerCase();
+
+let html = "";
+let count = 0;
+
+Object.keys(allDevices).forEach(
+function(deviceID){
+
+if(
+!deviceID
+.toLowerCase()
+.includes(search)
+)
+{
+return;
+}
+
+count++;
+
+const d =
+allDevices[deviceID];
+
+let statusClass =
+"offline";
+
+let statusText =
+"Offline";
+
+if(d.lastSeen)
+{
+const now =
+Math.floor(
+Date.now()/1000
+);
+
+const diff =
+now - d.lastSeen;
+
+if(diff < 300)
+{
+statusClass =
+"online";
+
+statusText =
+"Online";
+}
+else if(diff < 600)
+{
+statusClass =
+"warning";
+
+statusText =
+"Warning";
+}
+else
+{
+statusClass =
+"offline";
+
+statusText =
+"Offline";
+}
+}
+
+html += `
+
+<div class="card">
+
+<div class="status ${statusClass}">
+● ${statusText}
+</div>
+
+<div class="deviceid">
+${deviceID}
+</div>
+
+<div class="temp">
+🌡 Temperature:
+<b>
+${d.temperature ?? '--'}
+</b> °C
+</div>
+
+<div class="hum">
+💧 Humidity:
+<b>
+${d.humidity ?? '--'}
+</b> %
+</div>
+
+<div class="press">
+📈 Pressure:
+<b>
+${d.pressure ?? '--'}
+</b> hPa
+</div>
+
+<div class="time">
+🕒 Last Update:
+${d.datetime ?? 'Not Available'}
+</div>
+
+</div>
+
+`;
+
+});
+
+if(count === 0)
+{
+html =
+
+'<div class="noData">No Devices Found</div>';
+
+}
+
+document.getElementById(
+"devices"
+).innerHTML = html;
+
+document.getElementById(
+"deviceCount"
+).innerText = count;
+}
+
+document
+.getElementById(
+"searchBox"
+)
+.addEventListener(
+"input",
+renderDevices
+);
+
+</script>
+
+</body>
+</html>
